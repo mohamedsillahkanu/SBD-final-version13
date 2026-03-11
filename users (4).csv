@@ -1,0 +1,28 @@
+username,full_name,role,district,staff_id,phone,vehicle_letters,vehicle_numbers,email
+DMS-PL-01,Mohamed Kamara,DMS Staff,Port Loko,SL-DMS-PL-01,076123401,,, mkamara@nmcp.gov.sl
+DMS-PL-02,Fatima Koroma,DMS Staff,Port Loko,SL-DMS-PL-02,076123402,,,fkoroma@nmcp.gov.sl
+DMS-PUJ-01,Ibrahim Sesay,DMS Staff,Pujehun,SL-DMS-PUJ-01,076234501,,,esesay@nmcp.gov.sl
+DMS-PUJ-02,Aminata Bangura,DMS Staff,Pujehun,SL-DMS-PUJ-02,076234502,,,abangura@nmcp.gov.sl
+DMS-KOI-01,Samuel Turay,DMS Staff,Koinadugu,SL-DMS-KOI-01,076345601,,,sturay@nmcp.gov.sl
+DMS-KOI-02,Mariama Conteh,DMS Staff,Koinadugu,SL-DMS-KOI-02,076345602,,,mconteh@nmcp.gov.sl
+DMS-BON-01,Lansana Fofanah,DMS Staff,Bonthe,SL-DMS-BON-01,076456701,,,lfofanah@nmcp.gov.sl
+DMS-BON-02,Hawa Jalloh,DMS Staff,Bonthe,SL-DMS-BON-02,076456702,,,hjalloh@nmcp.gov.sl
+DMS-HQ-01,Alpha Kamara,DMS Staff,All Districts,SL-DMS-HQ-01,076000101,,,akamara@nmcp.gov.sl
+DMS-HQ-02,Isata Mansaray,DMS Staff,All Districts,SL-DMS-HQ-02,076000102,,,imansaray@nmcp.gov.sl
+DRV-PL-01,Abdul Conteh,Driver,Port Loko,SL-DRV-PL-01,076567801,ABC,123,
+DRV-PL-02,Lansana Turay,Driver,Port Loko,SL-DRV-PL-02,076567802,DEF,456,
+DRV-PL-03,Mohamed Bah,Driver,Port Loko,SL-DRV-PL-03,076567803,GHI,789,
+DRV-PL-04,Sorie Koroma,Driver,Port Loko,SL-DRV-PL-04,076567804,JKL,012,
+DRV-PL-05,Emmanuel Kamara,Driver,Port Loko,SL-DRV-PL-05,076567805,MNO,345,
+DRV-PUJ-01,Brima Sesay,Driver,Pujehun,SL-DRV-PUJ-01,076678901,PQR,678,
+DRV-PUJ-02,Foday Bangura,Driver,Pujehun,SL-DRV-PUJ-02,076678902,STU,901,
+DRV-PUJ-03,Hassan Conteh,Driver,Pujehun,SL-DRV-PUJ-03,076678903,VWX,234,
+DRV-PUJ-04,Ibrahim Kargbo,Driver,Pujehun,SL-DRV-PUJ-04,076678904,YZA,567,
+DRV-KOI-01,Joseph Turay,Driver,Koinadugu,SL-DRV-KOI-01,076789001,BCD,890,
+DRV-KOI-02,Kalilu Fofanah,Driver,Koinadugu,SL-DRV-KOI-02,076789002,EFG,123,
+DRV-KOI-03,Lamin Jalloh,Driver,Koinadugu,SL-DRV-KOI-03,076789003,HIJ,456,
+DRV-KOI-04,Momoh Kamara,Driver,Koinadugu,SL-DRV-KOI-04,076789004,KLM,789,
+DRV-BON-01,Nathaniel Sesay,Driver,Bonthe,SL-DRV-BON-01,076890101,NOP,012,
+DRV-BON-02,Osman Bangura,Driver,Bonthe,SL-DRV-BON-02,076890102,QRS,345,
+DRV-BON-03,Patrick Koroma,Driver,Bonthe,SL-DRV-BON-03,076890103,TUV,678,
+DRV-BON-04,Rashid Conteh,Driver,Bonthe,SL-DRV-BON-04,076890104,WXY,901,
