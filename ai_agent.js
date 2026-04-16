@@ -143,7 +143,33 @@
     .an-badge-g{background:#e8f5e9;color:#28a745;}.an-badge-o{background:#fff8e1;color:#b8860b;}.an-badge-r{background:#fdecea;color:#dc3545;}
     .an-no-data{text-align:center;padding:50px 20px;color:#8090a0;font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.5px;}
     .an-no-data svg{width:40px;height:40px;stroke:#c0ccd8;margin-bottom:10px;}
-    @media(max-width:600px){.an-charts-2,.an-charts-3{grid-template-columns:1fr;}.an-kpi-row{grid-template-columns:repeat(2,1fr);}}
+    /* ── Responsive: Tablet ── */
+    @media(max-width:900px){
+        .an-charts-3{grid-template-columns:1fr 1fr;}
+        .an-kpi-row{grid-template-columns:repeat(3,1fr);}
+    }
+    /* ── Responsive: Mobile ── */
+    @media(max-width:600px){
+        .an-charts-2,.an-charts-3{grid-template-columns:1fr;}
+        .an-kpi-row{grid-template-columns:repeat(2,1fr);}
+        .an-kpi-val{font-size:20px;}
+        .an-section-hdr{font-size:11px;}
+        .an-tbl th,.an-tbl td{padding:6px 8px;font-size:11px;}
+        /* Header responsive */
+        .an-dash-title{font-size:13px !important;}
+        .an-dash-subtitle{display:none;}
+        .an-dash-refresh{min-width:unset !important;padding:7px 10px !important;}
+        .an-dash-refresh span{display:none;}
+        .an-dash-close span{display:none;}
+        /* Filter bar */
+        .af-grp{min-width:calc(50% - 4px) !important;flex:unset !important;}
+        /* KPI cards */
+        .an-kpi{padding:10px 8px;}
+    }
+    @media(max-width:360px){
+        .an-kpi-row{grid-template-columns:repeat(2,1fr);}
+        .an-kpi-val{font-size:18px;}
+    }
     `;
     document.head.appendChild(style);
 
@@ -231,69 +257,82 @@
     }
 
     async function fetchSheetData(){
-        // ── Method 1: GAS ?action=getData (15s timeout) ────────
         try{
-            const res=await Promise.race([
+            const res = await Promise.race([
                 fetch(GAS_URL+'?action=getData'),
-                new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000))
+                new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),25000))
             ]);
             if(res.ok){
-                const d=await res.json();
-                const rows=d.rows||d.data||(Array.isArray(d)?d:null);
-                if(rows&&rows.length>0){console.log('[Analysis] Loaded',rows.length,'rows from GAS');return rows;}
+                const d = await res.json();
+                const rows = d.rows||d.data||(Array.isArray(d)?d:null);
+                if(rows&&rows.length>0){
+                    console.log('[Analysis] Loaded',rows.length,'rows from GAS');
+                    // Log first row to verify field values
+                    const r0 = rows[0];
+                    console.log('[Analysis] Sample row:',{
+                        total_pupils: r0.total_pupils,
+                        total_itn:    r0.total_itn,
+                        total_boys:   r0.total_boys,
+                        total_girls:  r0.total_girls,
+                        total_boys_itn: r0.total_boys_itn,
+                        total_girls_itn: r0.total_girls_itn
+                    });
+                    return rows;
+                }
             }
-        }catch(e){console.warn('[Analysis] GAS getData:',e.message);}
-
-        // ── Method 2: Direct ICF-SL Server CSV export ───────────
-        try{
-            const csvUrl=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-            const rows=await new Promise((resolve,reject)=>{
-                Papa.parse(csvUrl,{
-                    download:true,header:true,skipEmptyLines:true,
-                    complete:r=>resolve(r.data||[]),
-                    error:reject
-                });
-            });
-            if(rows&&rows.length>0){console.log('[Analysis] Loaded',rows.length,'rows from CSV export');return rows;}
-        }catch(e){console.warn('[Analysis] CSV export:',e.message);}
-
-        console.warn('[Analysis] Sheet fetch failed — local data only');
-        return[];
+        }catch(e){console.warn('[Analysis] GAS fetch failed:',e.message);}
+        return [];
     }
+
+
+    // Helper: read a numeric value from a row using column label
+    // Tries both the field name and the label so it works regardless of what GAS returns
+    function n(r,key,fallback){
+        // key = field name (GAS) or label (CSV)
+        // tries key first, then fallback, then label variants
+        let v = r[key];
+        if((v===undefined||v===''||v===null) && fallback) v = r[fallback];
+        if(v===undefined||v===null||v==='') return 0;
+        // Strip comma formatting, handle locale decimals
+        const clean = String(v).replace(/,/g,'').trim();
+        return parseFloat(clean)||0;
+    }
+    function s(r,key,fallback){
+        let v = r[key];
+        if((v===undefined||v===null||v==='') && fallback) v = r[fallback];
+        return String(v||'').trim();
+    }
+
+
 
     async function fetchCount(){
-        try{const r=await fetch(GAS_URL+'?action=count');const d=await r.json();return d.count!==undefined?d.count:'?';}catch{return'?';}
+        try{
+            const r=await fetch(GAS_URL+'?action=count');
+            const d=await r.json();
+            return d.count!==undefined?d.count:'?';
+        }catch{return'?';}
     }
 
-    // Build targets from the already-loaded CSV cascading data.
-    // Key = district|chiefdom|phu|community|school_name (same school name in different community = different school)
     function buildTargetsFromCSV() {
-        // Key = district|chiefdom|phu|community|school — all 5 parts
         const data = window.ALL_LOCATION_DATA || {};
         const targets = {};
-
         for (const district in data) {
             const dk = district.trim().toLowerCase();
             const dSet = new Set();
-
             for (const chiefdom in data[district]) {
                 const ck = chiefdom.trim().toLowerCase();
                 const cSet = new Set();
-
                 for (const phu in data[district][chiefdom]) {
                     const pk = phu.trim().toLowerCase();
                     const pSet = new Set();
-
                     for (const community in data[district][chiefdom][phu]) {
                         const comk = community.trim().toLowerCase();
                         const schools = data[district][chiefdom][phu][community];
                         if (!Array.isArray(schools)) continue;
-                        schools.forEach(s => {
-                            if (!s) return;
-                            const fullKey = dk+'|'+ck+'|'+pk+'|'+comk+'|'+s.trim().toLowerCase();
-                            pSet.add(fullKey);
-                            cSet.add(fullKey);
-                            dSet.add(fullKey);
+                        schools.forEach(sc => {
+                            if (!sc) return;
+                            const fullKey = dk+'|'+ck+'|'+pk+'|'+comk+'|'+sc.trim().toLowerCase();
+                            pSet.add(fullKey); cSet.add(fullKey); dSet.add(fullKey);
                         });
                     }
                     if (pSet.size > 0) targets[dk+'|'+ck+'|'+pk] = pSet.size;
@@ -345,7 +384,6 @@
         const d  =()=>document.getElementById('af_district' )?.value||'';
         const c  =()=>document.getElementById('af_chiefdom' )?.value||'';
         const f  =()=>document.getElementById('af_facility' )?.value||'';
-        const co =()=>document.getElementById('af_community')?.value||'';
 
         const resetBelow=(...ids)=>ids.forEach(id=>{
             const el=document.getElementById(id);
@@ -353,11 +391,11 @@
         });
 
         if(level==='district'){
-            resetBelow('af_chiefdom','af_facility','af_community','af_school');
+            resetBelow('af_chiefdom','af_facility');
             if(d()&&loc[d()]) afOpt('af_chiefdom',Object.keys(loc[d()]),false);
 
         }else if(level==='chiefdom'){
-            resetBelow('af_facility','af_community','af_school');
+            resetBelow('af_facility');
             if(d()&&c()&&loc[d()]?.[c()]) afOpt('af_facility',Object.keys(loc[d()][c()]),false);
 
         }else if(level==='facility'){
@@ -374,7 +412,7 @@
     };
 
     window.clearAnalysisFilters=function(){
-        ['af_chiefdom','af_facility','af_community','af_school'].forEach(id=>{
+        ['af_chiefdom','af_facility'].forEach(id=>{
             const el=document.getElementById(id);
             if(el){el.innerHTML='<option value="">All</option>';el.disabled=true;}
         });
@@ -397,15 +435,11 @@
         const fD  =document.getElementById('af_district' )?.value||'';
         const fC  =document.getElementById('af_chiefdom' )?.value||'';
         const fF  =document.getElementById('af_facility' )?.value||'';
-        const fCom=document.getElementById('af_community')?.value||'';
-        const fSch=document.getElementById('af_school'   )?.value||'';
-        const lc=s=>(s||'').toLowerCase();
+                const lc=s=>(s||'').toLowerCase();
         if(fD)   rows=rows.filter(r=>lc(r.district ||'')===lc(fD));
         if(fC)   rows=rows.filter(r=>lc(r.chiefdom ||'')===lc(fC));
         if(fF)   rows=rows.filter(r=>lc(r.facility ||'')===lc(fF));
-        if(fCom) rows=rows.filter(r=>lc(r.community||'')===lc(fCom));
-        if(fSch) rows=rows.filter(r=>lc(r.school_name||'')===lc(fSch));
-        return rows;
+                return rows;
     }
 
     // ════════════════════════════════════════════════════════
@@ -480,18 +514,27 @@
         const cls={b:[0,0,0,0,0],g:[0,0,0,0,0],bi:[0,0,0,0,0],gi:[0,0,0,0,0]};
 
         all.forEach(r=>{
-            const vp=+r.total_pupils||0,vi=+r.total_itn||0,vb=+r.total_boys||0,vg=+r.total_girls||0,
-                  vbi=+r.total_boys_itn||0,vgi=+r.total_girls_itn||0,
-                  vr=+r.itns_received||0,vrem=+(r.itns_remaining||r.itns_remaining_val)||0;
+            // GAS returns field-name keyed rows — read directly
+            const vp =n(r,'total_pupils');
+            const vi =n(r,'total_itn');
+            const vb =n(r,'total_boys');
+            const vg =n(r,'total_girls');
+            const vbi=n(r,'total_boys_itn');
+            const vgi=n(r,'total_girls_itn');
+            const vr =n(r,'itns_received');
+            const vrem=n(r,'itns_remaining')||n(r,'itns_remaining_val');
             tp+=vp;ti+=vi;tb+=vb;tg+=vg;tbi+=vbi;tgi+=vgi;tr+=vr;trem+=vrem;
-            const d=r.district||'Unknown';
+            const d=(r['district']||r['District']||'Unknown');
             if(!byDist[d])byDist[d]={n:0,p:0,i:0,b:0,g:0,bi:0,gi:0};
             byDist[d].n++;byDist[d].p+=vp;byDist[d].i+=vi;byDist[d].b+=vb;byDist[d].g+=vg;byDist[d].bi+=vbi;byDist[d].gi+=vgi;
 
-
             for(let c=1;c<=5;c++){
-                cls.b[c-1]+=+r['c'+c+'_boys']||0;cls.g[c-1]+=+r['c'+c+'_girls']||0;
-                cls.bi[c-1]+=+r['c'+c+'_boys_itn']||0;cls.gi[c-1]+=+r['c'+c+'_girls_itn']||0;
+                const cb=n(r,'c'+c+'_boys');
+                const cg=n(r,'c'+c+'_girls');
+                const cbi=n(r,'c'+c+'_boys_itn');
+                const cgi=n(r,'c'+c+'_girls_itn');
+                cls.b[c-1]+=cb; cls.g[c-1]+=cg;
+                cls.bi[c-1]+=cbi; cls.gi[c-1]+=cgi;
             }
         });
 
@@ -573,15 +616,15 @@
                 <thead><tr><th>#</th><th>School</th><th>Community</th><th>District</th><th>Pupils</th><th>Boys</th><th>Girls</th><th>ITNs</th><th>Remaining</th><th>Coverage</th><th>Date</th><th>By</th></tr></thead>
                 <tbody>
                   ${all.sort((a,b)=>(a.district||'').localeCompare(b.district||'')).map((r,i)=>{
-                    const vp=+r.total_pupils||0,vi=+r.total_itn||0,vb=+r.total_boys||0,vg=+r.total_girls||0;
-                    const vrem=+(r.itns_remaining||r.itns_remaining_val)||0;
+                    const vp=n(r,'total_pupils'),vi=n(r,'total_itn'),vb=n(r,'total_boys'),vg=n(r,'total_girls');
+                    const vrem=n(r,'itns_remaining')||n(r,'itns_remaining_val');
                     const cov=vp>0?Math.round((vi/vp)*100):0;
                     const col=covColor(cov);
                     return`<tr>
                       <td style="color:#8090a0;font-size:11px;">${i+1}</td>
-                      <td style="font-weight:600;white-space:nowrap;">${r.school_name||'—'}</td>
-                      <td style="white-space:nowrap;">${r.community||'—'}</td>
-                      <td style="white-space:nowrap;">${r.district||'—'}</td>
+                      <td style="font-weight:600;white-space:nowrap;">${s(r,'school_name','School Name')||'—'}</td>
+                      <td style="white-space:nowrap;">${s(r,'community','Community / Village')||'—'}</td>
+                      <td style="white-space:nowrap;">${s(r,'district','District')||'—'}</td>
                       <td style="text-align:center;">${vp}</td>
                       <td style="text-align:center;color:#004080;">${vb}</td>
                       <td style="text-align:center;color:#e91e8c;">${vg}</td>
@@ -593,8 +636,8 @@
                           ${covBadge(cov)}
                         </div>
                       </td>
-                      <td style="font-size:11px;white-space:nowrap;">${r.distribution_date||'—'}</td>
-                      <td style="font-size:11px;color:#607080;white-space:nowrap;">${r.submitted_by||'—'}</td>
+                      <td style="font-size:11px;white-space:nowrap;">${s(r,'distribution_date','Distribution Date')||'—'}</td>
+                      <td style="font-size:11px;color:#607080;white-space:nowrap;">${s(r,'submitted_by','Submitted By')||'—'}</td>
                     </tr>`;
                   }).join('')}
                 </tbody>
@@ -637,19 +680,21 @@
     //  TAB SWITCHER
     // ════════════════════════════════════════════════════════
     window.switchAnTab = function(tab) {
-        const tabs = ['analysis', 'targets'];
+        const tabs = ['analysis', 'targets', 'dmsphu'];
+        const panelMap = { analysis:'analysisBody', targets:'targetsBody', dmsphu:'dmsphuBody' };
         tabs.forEach(t => {
-            const btn = document.getElementById('anTab-' + t);
-            const panel = document.getElementById(t === 'analysis' ? 'analysisBody' : 'targetsBody');
+            const btn   = document.getElementById('anTab-' + t);
+            const panel = document.getElementById(panelMap[t]);
             const isActive = t === tab;
             if (btn) {
-                btn.style.color       = isActive ? '#004080' : '#607080';
+                btn.style.color             = isActive ? '#004080' : '#607080';
                 btn.style.borderBottomColor = isActive ? '#c8991a' : 'transparent';
-                btn.style.background  = isActive ? '#f4f8ff' : 'none';
+                btn.style.background        = isActive ? '#f4f8ff' : 'none';
             }
             if (panel) panel.style.display = isActive ? 'block' : 'none';
         });
         if (tab === 'targets') renderTargetsTab();
+        if (tab === 'dmsphu')  renderDmsPhuTab();
     };
 
     // ════════════════════════════════════════════════════════
@@ -693,13 +738,14 @@
         return new Set(
             (_sheetRows || [])
                 .filter(r => r.school_name)
-                .map(r =>
-                    (r.district    ||'').trim().toLowerCase()+'|'+
-                    (r.chiefdom    ||'').trim().toLowerCase()+'|'+
-                    (r.facility    ||'').trim().toLowerCase()+'|'+
-                    (r.community   ||'').trim().toLowerCase()+'|'+
-                    (r.school_name ||'').trim().toLowerCase()
-                )
+                .map(r => {
+                    const _d  = (r.district  ||r['District']             ||'').trim().toLowerCase();
+                    const _c  = (r.chiefdom  ||r['Chiefdom']             ||'').trim().toLowerCase();
+                    const _f  = (r.facility  ||r['Health Facility (PHU)']||'').trim().toLowerCase();
+                    const _co = (r.community ||r['Community / Village']  ||'').trim().toLowerCase();
+                    const _sc = (r.school_name||r['School Name']         ||'').trim().toLowerCase();
+                    return _d+'|'+_c+'|'+_f+'|'+_co+'|'+_sc;
+                })
         );
     }
 
@@ -1065,14 +1111,23 @@
     window.anRefresh = async function(){
         const body=document.getElementById('analysisBody');
         if(body)body.innerHTML=`<div class="an-loading"><div class="an-spinner"></div><div class="an-load-txt">Refreshing from ICF-SL Server…</div></div>`;
+        const btn=document.getElementById('anRefreshBtn');
+        if(btn){btn.disabled=true;btn.textContent='↻ Loading…';}
         _refreshCountdown = 60;
-        updateRefreshBtn();
-        const rows = await fetchSheetData();
-        _sheetRows = rows;
-        window._TARGETS = buildTargetsFromCSV();
-        runAnalysis(rows);
-        const tBody = document.getElementById('targetsBody');
-        if(tBody && tBody.style.display !== 'none') renderTargetsTab();
+        try {
+            const rows = await fetchSheetData();
+            _sheetRows = rows;
+            window._TARGETS = buildTargetsFromCSV();
+            runAnalysis(rows);
+            const tBody = document.getElementById('targetsBody');
+            if(tBody && tBody.style.display !== 'none') renderTargetsTab();
+        } catch(e) {
+            console.warn('[Refresh]',e);
+            if(body)body.innerHTML=`<div class="an-no-data"><div style="margin-bottom:12px;">Could not load data — check connection and try again.</div><button onclick="anRefresh()" style="background:#004080;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">↻ RETRY</button></div>`;
+        } finally {
+            if(btn){btn.disabled=false;}
+            updateRefreshBtn();
+        }
     };
 
     // ════════════════════════════════════════════════════════
@@ -1132,12 +1187,12 @@
         try{
             const all=mergeData(_sheetRows);if(!all.length)return null;
             let tp=0,ti=0,tb=0,tg=0;const byDist={};
-            all.forEach(r=>{tp+=+r.total_pupils||0;ti+=+r.total_itn||0;tb+=+r.total_boys||0;tg+=+r.total_girls||0;const d=r.district||'Unknown';if(!byDist[d])byDist[d]={n:0,p:0,i:0};byDist[d].n++;byDist[d].p+=+r.total_pupils||0;byDist[d].i+=+r.total_itn||0;});
+            all.forEach(r=>{const _p=n(r,'Total Pupils Enrolled','total_pupils'),_i=n(r,'Total ITNs Distributed','total_itn'),_b=n(r,'Total Boys Enrolled','total_boys'),_g=n(r,'Total Girls Enrolled','total_girls');tp+=_p;ti+=_i;tb+=_b;tg+=_g;const d=s(r,'district','District')||'Unknown';if(!byDist[d])byDist[d]={n:0,p:0,i:0};byDist[d].n++;byDist[d].p+=_p;byDist[d].i+=_i;});
             const ov=tp>0?Math.round((ti/tp)*100):0;
             let ctx=`=== ICF-SL ITN DATA ===\nSchools:${all.length}|Pupils:${tp}(${tb}B/${tg}G)|Distributed:${ti}|Coverage:${ov}%\nBY DISTRICT:\n`;
             Object.entries(byDist).forEach(([d,v])=>{ctx+=`  ${d}:${v.n} schools,${v.p} pupils,${v.p>0?Math.round((v.i/v.p)*100):0}% cov\n`;});
             ctx+=`SCHOOLS:\n`;
-            all.slice(0,30).forEach((r,i)=>{const vp=+r.total_pupils||0,vi=+r.total_itn||0,cov=vp>0?Math.round((vi/vp)*100):0;ctx+=`[${i+1}] ${r.school_name||'—'}(${r.community||'—'},${r.district||'—'})P:${vp},ITN:${vi},Cov:${cov}%,by:${r.submitted_by||'—'}\n`;});
+            all.slice(0,30).forEach((r,i)=>{const vp=+r.total_pupils||0,vi=+r.total_itn||0,cov=vp>0?Math.round((vi/vp)*100):0;ctx+=`[${i+1}] ${s(r,'school_name','School Name')||'—'}(${s(r,'community','Community / Village')||'—'},${s(r,'district','District')||'—'})P:${vp},ITN:${vi},Cov:${cov}%,by:${s(r,'submitted_by','Submitted By')||'—'}\n`;});
             return ctx;
         }catch{return null;}
     }
@@ -1188,6 +1243,207 @@
     window.icfAiClose       =()=>document.getElementById('icfAiOverlay').classList.remove('show');
     window.icfAiOverlayClick=e=>{if(e.target.id==='icfAiOverlay')icfAiClose();};
     document.addEventListener('keydown',e=>{if(e.key==='Escape'){icfAiClose();closeAnalysisModal();}});
+
+
+// ════════════════════════════════════════════════════════
+    //  DMS/PHU TAB — PHU delivery tracking from CSV + GAS
+    // ════════════════════════════════════════════════════════
+    async function renderDmsPhuTab() {
+        const body = document.getElementById('dmsphuBody');
+        if (!body) return;
+        body.innerHTML = `<div style="text-align:center;padding:40px;">
+            <div style="border:4px solid #e0e7ef;border-top:4px solid #004080;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite;margin:0 auto 12px;"></div>
+            <div style="font-family:Oswald,sans-serif;font-size:13px;color:#607080;letter-spacing:.5px;">Loading PHU delivery data…</div>
+        </div>`;
+
+        try {
+            const lc = v => String(v||'').trim().toLowerCase();
+            const key = (d,c,f) => lc(d)+'|'+lc(c)+'|'+lc(f);
+
+            // 1. Load dms_cascading.csv — strip " District" and " Chiefdom" suffixes
+            const csvTree = {};
+            await new Promise(resolve => {
+                Papa.parse('./dms_cascading.csv', {
+                    download:true, header:true, skipEmptyLines:true,
+                    complete(res) {
+                        (res.data||[]).forEach(row => {
+                            // Strip " District" and " Chiefdom" suffixes to match sheet data
+                            let d = (row['District']||row['district']||'').trim().replace(/\s*District\s*$/i,'').trim();
+                            let c = (row['Chiefdom']||row['chiefdom']||'').trim().replace(/\s*Chiefdom\s*$/i,'').trim();
+                            const f = (row['Facility']||row['facility']||row['Name of PHU']||row['hf']||'').trim();
+                            if (!d||!c||!f) return;
+                            if (!csvTree[d]) csvTree[d]={};
+                            if (!csvTree[d][c]) csvTree[d][c]=[];
+                            if (!csvTree[d][c].includes(f)) csvTree[d][c].push(f);
+                        });
+                        console.log('[DMS/PHU] csvTree loaded:', Object.keys(csvTree).length, 'districts, sample:', Object.keys(csvTree)[0]);
+                        resolve();
+                    },
+                    error(){ resolve(); }
+                });
+            });
+
+            if (!Object.keys(csvTree).length) {
+                body.innerHTML='<div style="padding:24px;font-family:Oswald,sans-serif;color:#607080;font-size:13px;text-align:center;">No location data — ensure dms_cascading.csv is in the repo</div>';
+                return;
+            }
+
+            // 2. Fetch ITN Movement and PHU Receipts from GAS
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbymRy-M5v0fVLWUjw4IXYhd1oIR2ZvnP_Dzr_iGR-Th0cMIpmE2ntGeujWYH7-C6NHIzA/exec';
+
+            const parseArr = d => Array.isArray(d) ? d : (Array.isArray(d?.rows) ? d.rows : (Array.isArray(d?.data) ? d.data : []));
+
+            const [dispRaw, recRaw] = await Promise.allSettled([
+                fetch(gasUrl + '?action=getAllDispatches').then(r=>r.json()).catch(()=>[]),
+                fetch(gasUrl + '?action=getAllReceipts').then(r=>r.json()).catch(()=>[])
+            ]);
+
+            const dispatched = parseArr(dispRaw.status==='fulfilled' ? dispRaw.value : []);
+            const received   = parseArr(recRaw.status==='fulfilled'  ? recRaw.value  : []);
+            console.log('[DMS/PHU] Dispatches:',dispatched.length,'Receipts:',received.length);
+            if(dispatched.length) console.log('[DMS/PHU] Sample dispatch:',JSON.stringify(dispatched[0]));
+            if(received.length)   console.log('[DMS/PHU] Sample receipt:',JSON.stringify(received[0]));
+
+            // Build composite key sets: district|chiefdom|phu (lowercase)
+            // ITN Movement:  district=Destination District, chiefdom=Chiefdom, phu=Health Facility (PHU)
+            // PHU Receipts:  district=District, chiefdom=Chiefdom, phu=PHU
+            // Build sets with multiple key formats for robust matching
+            const dispSet    = new Set(dispatched.map(d => key(d.district, d.chiefdom, d.phu)));
+            const dispPhuOnly= new Set(dispatched.map(d => lc(d.phu)));
+            const recSet     = new Set(received.map(r  => key(r.district, r.chiefdom, r.phu)));
+            const recPhuOnly = new Set(received.map(r  => lc(r.phu)));
+
+            // Diagnostic: log first 5 PHUs from each set
+            console.log('[DMS/PHU] dispPhuOnly sample:',[...dispPhuOnly].slice(0,5));
+            console.log('[DMS/PHU] recPhuOnly sample:',[...recPhuOnly].slice(0,5));
+            // Log first 5 PHUs from csvTree to compare
+            const csvSample=[];
+            Object.keys(csvTree).slice(0,2).forEach(d=>Object.keys(csvTree[d]).slice(0,1).forEach(c=>csvTree[d][c].slice(0,3).forEach(f=>csvSample.push({d,c,f:f.toLowerCase()}))));
+            console.log('[DMS/PHU] csvTree sample:',csvSample);
+
+            function isDispatched(d,c,f){ return dispSet.has(key(d,c,f)) || dispPhuOnly.has(lc(f)); }
+            function isReceived(d,c,f){   return recSet.has(key(d,c,f))  || recPhuOnly.has(lc(f));  }
+
+            // 3. Totals
+            let totTotal=0, totReceived=0, totPending=0, totNot=0;
+            Object.keys(csvTree).forEach(district => {
+                Object.keys(csvTree[district]).forEach(chiefdom => {
+                    csvTree[district][chiefdom].forEach(phu => {
+                        totTotal++;
+                        if (isDispatched(district,chiefdom,phu) && isReceived(district,chiefdom,phu)) totReceived++;
+                        else if (isDispatched(district,chiefdom,phu)) totPending++;
+                        else totNot++;
+                    });
+                });
+            });
+
+            const pct = totTotal ? Math.round(totReceived/totTotal*100) : 0;
+
+            // 4. Render summary
+            let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                ${dmsCard('Total PHUs', totTotal, '#004080')}
+                ${dmsCard('Received ✅', totReceived, '#28a745')}
+                ${dmsCard('Pending ⏳', totPending, '#f59e0b')}
+                ${dmsCard('Not Started 🔴', totNot, '#dc3545')}
+            </div>
+            <div style="background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,.05);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-family:Oswald,sans-serif;font-size:11px;color:#607080;letter-spacing:1px;text-transform:uppercase;">Overall Delivery Progress</span>
+                    <span style="font-family:Oswald,sans-serif;font-size:20px;font-weight:700;color:#004080;">${pct}%</span>
+                </div>
+                <div style="height:10px;background:#e8f0f8;border-radius:6px;overflow:hidden;">
+                    <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#004080,#28a745);border-radius:6px;"></div>
+                </div>
+                <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:#94a3b8;">
+                    <span style="color:#28a745;font-weight:700;">${totReceived} received</span>
+                    <span style="color:#f59e0b;font-weight:700;">${totPending} pending</span>
+                    <span style="color:#dc3545;font-weight:700;">${totNot} not started</span>
+                </div>
+            </div>`;
+
+            // 5. District > Chiefdom > PHU breakdown
+            Object.keys(csvTree).sort().forEach(district => {
+                const duid = 'dist_' + district.replace(/\s+/g,'_').replace(/[^a-z0-9_]/gi,'');
+                // District stats
+                let dRec=0,dPend=0,dNot=0,dTotal=0;
+                Object.keys(csvTree[district]).forEach(chiefdom => {
+                    csvTree[district][chiefdom].forEach(phu => {
+                        dTotal++;
+                        if(isDispatched(district,chiefdom,phu)&&isReceived(district,chiefdom,phu))dRec++;
+                        else if(isDispatched(district,chiefdom,phu))dPend++; else dNot++;
+                    });
+                });
+                const dPct = dTotal ? Math.round(dRec/dTotal*100) : 0;
+                const dBorder = dRec===dTotal?'#28a745':dPend>0?'#f59e0b':'#e2e8f0';
+
+                html += `<div style="background:#fff;border-radius:14px;box-shadow:0 3px 14px rgba(0,64,128,.08);margin-bottom:12px;margin-top:16px;overflow:hidden;">
+                    <div style="background:linear-gradient(135deg,#002952,#004080);padding:13px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-left:5px solid ${dBorder};"
+                        onclick="var el=document.getElementById('${duid}');var arr=document.getElementById('${duid}_arr');el.style.display=el.style.display==='none'?'block':'none';arr.textContent=el.style.display==='none'?'▶':'▼';">
+                        <div>
+                            <div style="font-family:Oswald,sans-serif;font-size:15px;color:#ffc107;letter-spacing:1.5px;">📍 ${district.toUpperCase()}</div>
+                            <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:2px;">${dTotal} PHUs · <span style="color:#6ee7b7;">${dRec} received</span> · <span style="color:#fde68a;">${dPend} pending</span> · <span style="color:#fca5a5;">${dNot} not started</span></div>
+                        </div>
+                        <div style="text-align:right;display:flex;align-items:center;gap:10px;">
+                            <div>
+                                <div style="font-family:Oswald,sans-serif;font-size:20px;font-weight:700;color:#ffc107;">${dPct}%</div>
+                                <div style="height:4px;width:60px;background:rgba(255,255,255,.2);border-radius:3px;margin-top:3px;"><div style="height:100%;width:${dPct}%;background:#ffc107;border-radius:3px;"></div></div>
+                            </div>
+                            <span id="${duid}_arr" style="color:#ffc107;font-size:14px;">▶</span>
+                        </div>
+                    </div>
+                    <div id="${duid}" style="display:none;padding:12px;">`;
+
+                Object.keys(csvTree[district]).sort().forEach(chiefdom => {
+                    const phus = csvTree[district][chiefdom];
+                    let cRec=0,cPend=0,cNot=0;
+                    phus.forEach(phu=>{ if(isDispatched(district,chiefdom,phu)&&isReceived(district,chiefdom,phu))cRec++; else if(isDispatched(district,chiefdom,phu))cPend++; else cNot++; });
+                    const cPct = phus.length ? Math.round(cRec/phus.length*100) : 0;
+                    const borderColor = cRec===phus.length ? '#28a745' : cPend>0 ? '#f59e0b' : '#e2e8f0';
+                    const uid = 'ch_' + Math.random().toString(36).slice(2,8);
+
+                    html += `<div style="background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);margin-bottom:10px;overflow:hidden;">
+                        <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-left:4px solid ${borderColor};"
+                            onclick="var el=document.getElementById('${uid}');el.style.display=el.style.display==='none'?'block':'none';">
+                            <div>
+                                <div style="font-family:Oswald,sans-serif;font-size:14px;color:#0f172a;letter-spacing:.5px;">${chiefdom}</div>
+                                <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${phus.length} PHUs · <span style="color:#28a745;">${cRec} received</span> · <span style="color:#f59e0b;">${cPend} pending</span> · <span style="color:#dc3545;">${cNot} not started</span></div>
+                            </div>
+                            <div style="text-align:right;flex-shrink:0;margin-left:10px;">
+                                <div style="font-family:Oswald,sans-serif;font-size:18px;font-weight:700;color:#004080;">${cPct}%</div>
+                                <div style="height:4px;width:56px;background:#e8f0f8;border-radius:3px;margin-top:3px;"><div style="height:100%;width:${cPct}%;background:#28a745;border-radius:3px;"></div></div>
+                            </div>
+                        </div>
+                        <div id="${uid}" style="display:none;padding:10px 16px 12px;">
+                            ${phus.map(phu => {
+                                const wasD=isDispatched(district,chiefdom,phu), wasR=isReceived(district,chiefdom,phu);
+                                let icon,label,bg,textColor;
+                                if (wasD&&wasR)    { icon='✅'; label='Received';    bg='#e8f5e9'; textColor='#1e7a34'; }
+                                else if (wasD)     { icon='⏳'; label='Pending';     bg='#fffbeb'; textColor='#92400e'; }
+                                else               { icon='🔴'; label='Not Started'; bg='#fff1f1'; textColor='#b91c1c'; }
+                                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:${bg};border-radius:8px;margin-bottom:5px;">
+                                    <span style="font-size:12px;font-weight:500;color:#0f172a;">${icon} ${phu}</span>
+                                    <span style="font-size:10px;font-weight:700;color:${textColor};">${label}</span>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            });
+
+            body.innerHTML = html;
+
+        } catch(err) {
+            body.innerHTML = `<div style="padding:24px;font-family:Oswald,sans-serif;color:#dc3545;font-size:13px;">Error: ${err.message}</div>`;
+        }
+    }
+
+    function dmsCard(label, val, color) {
+        return `<div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.05);border-top:4px solid ${color};">
+            <div style="font-family:Oswald,sans-serif;font-size:28px;font-weight:700;color:${color};">${val}</div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;margin-top:4px;">${label}</div>
+        </div>`;
+    }
 
     console.log('[ICF AI Agent] Loaded ✓');
 })();
